@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #ifndef _MINER_H_
 #define _MINER_H_
 

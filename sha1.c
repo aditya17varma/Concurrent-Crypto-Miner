@@ -2,6 +2,10 @@
 
 #include "sha1.h"
 
+
+// NO NEED TO MODIFY
+// 
+
 /******************** See RFC 4634 for details ******************/
 /*
 *  Description:

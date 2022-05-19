@@ -96,13 +96,28 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    int num_threads = 1; // TODO
+    int num_threads = atoi(argv[1]); // TODO
     printf("Number of threads: %d\n", num_threads);
 
     // TODO we have hard coded the difficulty to 20 bits (0x0000FFF). This is a
     // fairly quick computation -- something like 28 will take much longer.  You
     // should allow the user to specify anywhere between 1 and 32 bits of zeros.
-    uint32_t difficulty_mask = 0x00000FFF;
+    int difficulty = atoi(argv[2]);
+    printf("We want this difficulty: %d\n", difficulty);
+
+    uint32_t difficulty_mask = 0b0;
+    int num_ones = 32 - difficulty;
+
+    for (int i = 0; i < num_ones; i++){
+        difficulty_mask = difficulty_mask | 1 << i;
+    }
+
+    difficulty_mask = ~(0);
+    difficulty_mask = difficulty_mask >> difficulty;
+
+
+    // uint32_t difficulty_mask = 0x00000FFF;
+    // difficulty_mask = 4095;
     printf("  Difficulty Mask: ");
     print_binary32(difficulty_mask);
 
