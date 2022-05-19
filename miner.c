@@ -35,6 +35,7 @@
 #include <sys/time.h>
 
 #include "sha1.h"
+#include "logger.h"
 
 unsigned long long total_inversions;
 
@@ -44,18 +45,61 @@ pthread_cond_t condp = PTHREAD_COND_INITIALIZER;
 
 int buffer = 0;
 
+uint64_t global_nonce = 0;
+int rank_found = 0;
+char *global_data;
+uint32_t global_diff;
+
+
 struct dataHolder {
     int rank;
     char *data_b;
     uint32_t difficulty_m;
     uint64_t nonce_s;
-    uint64_t nonce_e;
-    uint8_t dige;
+    // uint64_t nonce_e;
+    // uint8_t dige;
 };
 
 uint64_t mine(char *data_block, uint32_t difficulty_mask,
         uint64_t nonce_start, uint64_t nonce_end,
         uint8_t digest[SHA1_HASH_SIZE]);
+
+void * producer_thread(){
+    return 0;
+}
+
+// void * consumer_fast(void * rank){
+//     int num = (intptr_t) rank;
+//     int nonce_start;
+//     if (num == 0){
+//         nonce_start = 1;
+//     } else {
+//         nonce_start = num * 100000;
+//     }
+//     uint8_t digest[SHA1_HASH_SIZE];
+
+//     pthread_mutex_unlock(&mutex);
+//     char *data_block = global_data;
+//     uint32_t difficulty_mask = global_diff;
+//     pthread_mutex_lock(&mutex);
+
+
+//     uint64_t nonce = mine(
+//             data_block,
+//             difficulty_mask,
+//             nonce_start, UINT64_MAX,
+//             digest);
+
+//     if (nonce != 0){
+//         pthread_mutex_unlock(&mutex);
+//         global_nonce = nonce;
+//         rank_found = num;
+//         pthread_mutex_lock(&mutex);
+//     }
+
+//     return 0;
+    
+// }
 
 void * consumer_thread(void *data){
     struct dataHolder *d;
@@ -65,16 +109,25 @@ void * consumer_thread(void *data){
     char *data_block = d->data_b;
     uint32_t difficulty_mask = d->difficulty_m;
     uint64_t nonce_start = d->nonce_s;
-    uint64_t nonce_end = d->nonce_e;
-    uint8_t digest[SHA1_HASH_SIZE] = d->dige;
+    // uint64_t nonce_end = d->nonce_e;
+    uint8_t digest[SHA1_HASH_SIZE];
 
     uint64_t nonce = mine(
-            bitcoin_block_data,
+            data_block,
             difficulty_mask,
-            1, UINT64_MAX,
+            nonce_start, UINT64_MAX,
             digest);
 
-    return nonce;
+    if (nonce != 0){
+        pthread_mutex_unlock(&mutex);
+        global_nonce = nonce;
+        rank_found = rank;
+        pthread_mutex_lock(&mutex);
+    }
+
+    free(d);
+
+    return 0;
 }
 
 double get_time()
@@ -136,6 +189,8 @@ int main(int argc, char *argv[]) {
     }
 
     int num_threads = atoi(argv[1]); // TODO
+    // num_threads++;
+    LOG("Threads: %d\n", num_threads);
     printf("Number of threads: %d\n", num_threads);
 
 
@@ -154,6 +209,7 @@ int main(int argc, char *argv[]) {
 
     difficulty_mask = ~(0);
     difficulty_mask = difficulty_mask >> difficulty;
+    global_diff = difficulty_mask;
 
 
     // uint32_t difficulty_mask = 0x00000FFF;
@@ -174,14 +230,20 @@ int main(int argc, char *argv[]) {
     uint8_t digest[SHA1_HASH_SIZE];
 
     /* Mine the block. */
-    uint64_t nonce = mine(
-            bitcoin_block_data,
-            difficulty_mask,
-            1, UINT64_MAX,
-            digest);
+    // uint64_t nonce = mine(
+    //         bitcoin_block_data,
+    //         difficulty_mask,
+    //         1, UINT64_MAX,
+    //         digest);
 
     //create threads
+    global_data = argv[3];
+    pthread_t producer;
+    pthread_create(&producer, NULL, producer_thread, NULL);
     pthread_t consumers[num_threads];
+    //lock mutex
+    pthread_mutex_lock(&mutex);
+    uint64_t start = 0;
     for (int i = 0; i < num_threads; i++){
         // void ** temp_arr;
         // temp_arr = malloc(sizeof (void *) * 6);
@@ -196,16 +258,29 @@ int main(int argc, char *argv[]) {
         tempData->rank = i;
         tempData->data_b = bitcoin_block_data;
         tempData->difficulty_m = difficulty_mask;
-        tempData->nonce_s = nonce_start;
-        tempData->nonce_e = nonce_end;
-        tempData->dige = digest;
+        if (i == 0){
+            tempData->nonce_s = 1;
+            start = 1;
+        } else {
+            start += 50000000;
+            tempData->nonce_s = start;
+        }
+        // tempData->nonce_e = UINT64_MAX;
+        // tempData->dige = digest;
         pthread_create(&consumers[i], NULL, consumer_thread,
              ((void *) tempData));
+
+        // pthread_create(&consumers[i], NULL, consumer_fast, (void *) (intptr_t) i);
+    }
+
+    pthread_join(producer, NULL);
+    for (int i = 0; i < num_threads; i++){
+        pthread_join(consumers[i], NULL);
     }
 
     double end_time = get_time();
 
-    if (nonce == 0) {
+    if (global_nonce == 0) {
         printf("No solution found!\n");
         return 1;
     }
@@ -214,8 +289,8 @@ int main(int argc, char *argv[]) {
     char solution_hash[41];
     sha1tostring(solution_hash, digest);
 
-    printf("Solution found by thread %d:\n", 0);
-    printf("Nonce: %lu\n", nonce);
+    printf("Solution found by thread %d:\n", rank_found);
+    printf("Nonce: %lu\n", global_nonce);
     printf(" Hash: %s\n", solution_hash);
 
     double total_time = end_time - start_time;
