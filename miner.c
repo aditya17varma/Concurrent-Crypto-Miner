@@ -38,6 +38,45 @@
 
 unsigned long long total_inversions;
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t condc = PTHREAD_COND_INITIALIZER;
+pthread_cond_t condp = PTHREAD_COND_INITIALIZER;
+
+int buffer = 0;
+
+struct dataHolder {
+    int rank;
+    char *data_b;
+    uint32_t difficulty_m;
+    uint64_t nonce_s;
+    uint64_t nonce_e;
+    uint8_t dige;
+};
+
+uint64_t mine(char *data_block, uint32_t difficulty_mask,
+        uint64_t nonce_start, uint64_t nonce_end,
+        uint8_t digest[SHA1_HASH_SIZE]);
+
+void * consumer_thread(void *data){
+    struct dataHolder *d;
+    d = data;
+    int rank = d->rank;
+
+    char *data_block = d->data_b;
+    uint32_t difficulty_mask = d->difficulty_m;
+    uint64_t nonce_start = d->nonce_s;
+    uint64_t nonce_end = d->nonce_e;
+    uint8_t digest[SHA1_HASH_SIZE] = d->dige;
+
+    uint64_t nonce = mine(
+            bitcoin_block_data,
+            difficulty_mask,
+            1, UINT64_MAX,
+            digest);
+
+    return nonce;
+}
+
 double get_time()
 {
     struct timeval tv;
@@ -99,6 +138,7 @@ int main(int argc, char *argv[]) {
     int num_threads = atoi(argv[1]); // TODO
     printf("Number of threads: %d\n", num_threads);
 
+
     // TODO we have hard coded the difficulty to 20 bits (0x0000FFF). This is a
     // fairly quick computation -- something like 28 will take much longer.  You
     // should allow the user to specify anywhere between 1 and 32 bits of zeros.
@@ -139,6 +179,29 @@ int main(int argc, char *argv[]) {
             difficulty_mask,
             1, UINT64_MAX,
             digest);
+
+    //create threads
+    pthread_t consumers[num_threads];
+    for (int i = 0; i < num_threads; i++){
+        // void ** temp_arr;
+        // temp_arr = malloc(sizeof (void *) * 6);
+        // &temp_arr[0] = i;
+        // temp_arr[1] = bitcoin_block_data;
+        // temp_arr[2] = (unsigned int *) difficulty_mask;
+        // temp_arr[3] = (int *) 1;
+        // temp_arr[4] = (long unsigned int *) UINT64_MAX;
+        // temp_arr[5] = digest;
+
+        struct dataHolder *tempData = malloc(sizeof(struct dataHolder));
+        tempData->rank = i;
+        tempData->data_b = bitcoin_block_data;
+        tempData->difficulty_m = difficulty_mask;
+        tempData->nonce_s = nonce_start;
+        tempData->nonce_e = nonce_end;
+        tempData->dige = digest;
+        pthread_create(&consumers[i], NULL, consumer_thread,
+             ((void *) tempData));
+    }
 
     double end_time = get_time();
 
