@@ -40,8 +40,8 @@
 unsigned long long total_inversions;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t condc = PTHREAD_COND_INITIALIZER;
-pthread_cond_t condp = PTHREAD_COND_INITIALIZER;
+// pthread_cond_t condc = PTHREAD_COND_INITIALIZER;
+// pthread_cond_t condp = PTHREAD_COND_INITIALIZER;
 
 int buffer = 0;
 
@@ -65,12 +65,17 @@ uint64_t mine(char *data_block, uint32_t difficulty_mask,
         uint8_t digest[SHA1_HASH_SIZE]);
 
 void * producer_thread(){
+    pthread_mutex_lock(&mutex);
+    LOGP("Hello there from Producer\n");
     return 0;
 }
 
-// void * consumer_fast(void * rank){
-//     int num = (intptr_t) rank;
-//     int nonce_start;
+// void * consumer_fast(void * arr_data){
+//     void * temp_data;
+//     temp_data = arr_data;
+//     int num = (int)(int **) &temp_data[0];
+
+//     int nonce_start = temp_data[3];
 //     if (num == 0){
 //         nonce_start = 1;
 //     } else {
@@ -78,10 +83,8 @@ void * producer_thread(){
 //     }
 //     uint8_t digest[SHA1_HASH_SIZE];
 
-//     pthread_mutex_unlock(&mutex);
-//     char *data_block = global_data;
-//     uint32_t difficulty_mask = global_diff;
-//     pthread_mutex_lock(&mutex);
+//     char *data_block = temp_data[1];
+//     uint32_t difficulty_mask = temp_data[2];
 
 
 //     uint64_t nonce = mine(
@@ -124,6 +127,8 @@ void * consumer_thread(void *data){
         rank_found = rank;
         pthread_mutex_lock(&mutex);
     }
+
+    LOG("Consumer: %d Nonce: %ld\n", rank, nonce);
 
     free(d);
 
@@ -190,7 +195,7 @@ int main(int argc, char *argv[]) {
 
     int num_threads = atoi(argv[1]); // TODO
     // num_threads++;
-    LOG("Threads: %d\n", num_threads);
+    // LOG("Log Threads: %d\n", num_threads);
     printf("Number of threads: %d\n", num_threads);
 
 
@@ -209,7 +214,7 @@ int main(int argc, char *argv[]) {
 
     difficulty_mask = ~(0);
     difficulty_mask = difficulty_mask >> difficulty;
-    global_diff = difficulty_mask;
+    // global_diff = difficulty_mask;
 
 
     // uint32_t difficulty_mask = 0x00000FFF;
@@ -230,29 +235,31 @@ int main(int argc, char *argv[]) {
     uint8_t digest[SHA1_HASH_SIZE];
 
     /* Mine the block. */
-    // uint64_t nonce = mine(
+    // uint64_t main_nonce = mine(
     //         bitcoin_block_data,
     //         difficulty_mask,
     //         1, UINT64_MAX,
     //         digest);
+    
+    // if (main_nonce != 0){
+    //     global_nonce = main_nonce;
+    //     rank_found = 0;
+    // }
 
     //create threads
-    global_data = argv[3];
-    pthread_t producer;
-    pthread_create(&producer, NULL, producer_thread, NULL);
+    // global_data = argv[3];
+    // pthread_t producer;
+    // pthread_create(&producer, NULL, producer_thread, NULL);
     pthread_t consumers[num_threads];
     //lock mutex
-    pthread_mutex_lock(&mutex);
+    // pthread_mutex_lock(&mutex);
     uint64_t start = 0;
     for (int i = 0; i < num_threads; i++){
-        // void ** temp_arr;
-        // temp_arr = malloc(sizeof (void *) * 6);
-        // &temp_arr[0] = i;
+        // void * temp_arr[];
+        // temp_arr = malloc(sizeof(void *) * 4);
+        // temp_arr[0] = i;
         // temp_arr[1] = bitcoin_block_data;
-        // temp_arr[2] = (unsigned int *) difficulty_mask;
-        // temp_arr[3] = (int *) 1;
-        // temp_arr[4] = (long unsigned int *) UINT64_MAX;
-        // temp_arr[5] = digest;
+        // temp_arr[2] = difficulty_mask;
 
         struct dataHolder *tempData = malloc(sizeof(struct dataHolder));
         tempData->rank = i;
@@ -260,22 +267,26 @@ int main(int argc, char *argv[]) {
         tempData->difficulty_m = difficulty_mask;
         if (i == 0){
             tempData->nonce_s = 1;
-            start = 1;
+            // temp_arr[3] = 1;
+            // start = 1;
         } else {
-            start += 50000000;
+            start += 1000000;
             tempData->nonce_s = start;
+            // temp_arr[3] = start;
         }
         // tempData->nonce_e = UINT64_MAX;
         // tempData->dige = digest;
-        pthread_create(&consumers[i], NULL, consumer_thread,
-             ((void *) tempData));
+        pthread_create(&consumers[i], NULL, consumer_thread, ((void *) tempData));
+        // LOG("create testing i: %d\n", tempData->rank);
 
-        // pthread_create(&consumers[i], NULL, consumer_fast, (void *) (intptr_t) i);
+        // pthread_create(&consumers[i], NULL, consumer_fast, (void *) temp_arr);
     }
 
-    pthread_join(producer, NULL);
+    // pthread_join(producer, NULL);
+
     for (int i = 0; i < num_threads; i++){
         pthread_join(consumers[i], NULL);
+        // LOG("join testing i: %d\n", i);
     }
 
     double end_time = get_time();
