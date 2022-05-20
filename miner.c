@@ -90,23 +90,28 @@ void * consumer_thread(void *data){
         pthread_cond_wait(&condc, &mutex);
     }
 
+    uint64_t local_nonce = buffer;
+    buffer = 0;
+    pthread_mutex_unlock(&mutex); 
+
+
     uint64_t nonce = mine(
         
             data_block,
             difficulty_mask,
-            nonce_start, nonce_end,
+            local_nonce, local_nonce + 100,
             digest);
     
     // LOGP("Checking nonce\n");
     LOG("nonce: %ld\n", nonce);
     if (nonce != 0){
         LOGP("valid nonce\n");
-        // pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&mutex);
         
         // LOGP("Got till after mutext lock\n");
         global_nonce = nonce;
         rank_found = rank;
-        // pthread_mutex_unlock(&mutex); 
+        pthread_mutex_unlock(&mutex); 
         // buffer = 0;
         // LOGP("Got till after mutex unlock\n");
     }
@@ -267,35 +272,25 @@ int main(int argc, char *argv[]) {
     //pseudo-producer
     
     uint64_t range = 1;
-    for (int i = 0; i < num_threads; i++){
+    for (int i = 0; i < UINT64_MAX; i += 100){
         LOGP("Starting prod loop\n");
         // if (global_nonce != 0){
         //     break;
         // }
         pthread_mutex_lock(&mutex);
-        while (buffer != 0) {
+        while (buffer != 0 && global_nonce != 0) {
             pthread_cond_wait(&condp, &mutex);
         }
-
-        buffer = 1;
-        LOG("ADDITION: %d\n", addition * i);
-        global_check = range + (addition * i);
-        LOG("prod buffer: %ld check: %ld\n", buffer, global_check);
-        // i++;
-
         if (global_nonce != 0){
             LOGP("breaking prod loop\n");
+            pthread_mutex_unlock(&mutex);
             break;
         }
-        
-        pthread_cond_broadcast(&condc);
+ 
+        buffer = // the next start value 1, 100, 200, ...
+        //buffer = 1;
+        pthread_cond_signal(&condc);
         pthread_mutex_unlock(&mutex);
-
-        if (global_nonce != 0){
-            LOGP("breaking prod loop\n");
-            break;
-        }
-        
     }
 
     LOGP("Outside the prod loop\n");
