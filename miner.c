@@ -278,8 +278,8 @@ int main(int argc, char *argv[]) {
         }
 
         buffer = 1;
-        LOG("ADDITION: %ld\n", addition * i);
-        global_check += range + (addition * i);
+        LOG("ADDITION: %d\n", addition * i);
+        global_check = range + (addition * i);
         LOG("prod buffer: %ld check: %ld\n", buffer, global_check);
         // i++;
 
@@ -301,6 +301,7 @@ int main(int argc, char *argv[]) {
     LOGP("Outside the prod loop\n");
 
     for (int i = 0; i < num_threads; i++){
+        LOG("Trying to join %d\n", i);
         if (pthread_join(consumers[i], NULL) != 0){
             LOG("Failed to join %d\n", i);
         }
