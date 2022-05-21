@@ -57,8 +57,8 @@ struct dataHolder {
     int rank;
     char *data_b;
     uint32_t difficulty_m;
-    uint64_t nonce_s;
-    uint64_t nonce_e;
+    // uint64_t nonce_s;
+    // uint64_t nonce_e;
     // uint8_t dige;
 };
 
@@ -73,17 +73,18 @@ void * consumer_thread(void *data){
     int rank = d->rank;
     char *data_block = d->data_b;
     uint32_t difficulty_mask = d->difficulty_m;
-    uint64_t nonce_start = d->nonce_s;
-    uint64_t nonce_end = d->nonce_e;
+    
     uint8_t digest[SHA1_HASH_SIZE];
 
-    LOG("start: %ld buffer: %ld rank:%d\n", nonce_start, buffer, rank);
+    // LOG("start: %ld buffer: %ld rank:%d\n", nonce_start, buffer, rank);
     
     uint64_t local_nonce = buffer;
     // LOG("local buffer: %ld start_r: %ld\n", local_nonce, nonce_start);
     buffer = 0;
     for (int i = 0; i < UINT64_MAX; i++){
         // LOG("iteration: %d\n", i);
+        uint64_t nonce_start;
+        uint64_t nonce_end;
         
         pthread_mutex_lock(&mutex);
         
@@ -193,7 +194,7 @@ int main(int argc, char *argv[]) {
     }
 
     int num_threads = atoi(argv[1]); // TODO
-    int num = num_threads;
+    num = num_threads;
     // num_threads++;
     // LOG("Log Threads: %d\n", num_threads);
     printf("Number of threads: %d\n", num_threads);
@@ -253,17 +254,17 @@ int main(int argc, char *argv[]) {
         tempData->rank = i;
         tempData->data_b = bitcoin_block_data;
         tempData->difficulty_m = difficulty_mask;
-        if (i == 0){
-            tempData->nonce_s = 1;
-        } else {
-            start += addition;
-            tempData->nonce_s = start;
-        }
-        if (i == num_threads - 1){
-            tempData->nonce_e = UINT64_MAX;
-        } else {
-            tempData->nonce_e = start + addition;
-        }
+        // if (i == 0){
+        //     tempData->nonce_s = 1;
+        // } else {
+        //     start += addition;
+        //     tempData->nonce_s = start;
+        // }
+        // if (i == num_threads - 1){
+        //     tempData->nonce_e = UINT64_MAX;
+        // } else {
+        //     tempData->nonce_e = start + addition;
+        // }
         // LOG("Testing start range: %d end range: %d\n", tempData->nonce_s, tempData->nonce_e);
         
         pthread_create(&consumers[i], NULL, consumer_thread, ((void *) tempData));
@@ -275,7 +276,7 @@ int main(int argc, char *argv[]) {
         
         
         pthread_mutex_lock(&mutex);
-        LOG("buffer: %ld  global_nonce: %ld\n", buffer, global_nonce);
+        // LOG("buffer: %ld  global_nonce: %ld\n", buffer, global_nonce);
         // if (i > 0){
         //     buffer += i;
         // }
@@ -284,7 +285,7 @@ int main(int argc, char *argv[]) {
             
             pthread_cond_broadcast(&condc);
             pthread_cond_wait(&condp, &mutex);
-            LOG("Post wait %ld\n", buffer);
+            // LOG("Post wait %ld\n", buffer);
             // i += addition;
             // continue;   
         }
@@ -299,7 +300,7 @@ int main(int argc, char *argv[]) {
 
         buffer = i + 1;
         
-        LOG("buffer: %ld\n", buffer);
+        // LOG("buffer: %ld\n", buffer);
         
         pthread_cond_signal(&condc);
         pthread_mutex_unlock(&mutex);
