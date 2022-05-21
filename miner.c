@@ -120,7 +120,7 @@ void * consumer_thread(void *data){
             global_nonce = nonce;
             rank_found = rank;
             
-            pthread_cond_broadcast(&condc);
+            pthread_cond_signal(&condc);
             pthread_mutex_unlock(&mutex); 
             // LOGP("Got till after mutex unlock\n");
             break;
