@@ -45,12 +45,12 @@ pthread_cond_t condp = PTHREAD_COND_INITIALIZER;
 
 uint64_t buffer = 0;
 
-uint64_t global_check = 0;
-
 uint64_t global_nonce = 0;
 int rank_found = 0;
 char *global_data;
 uint32_t global_diff;
+int num;
+int step = 100000;
 
 
 struct dataHolder {
@@ -66,13 +66,8 @@ uint64_t mine(char *data_block, uint32_t difficulty_mask,
         uint64_t nonce_start, uint64_t nonce_end,
         uint8_t digest[SHA1_HASH_SIZE]);
 
-// void * producer_thread(){
-//     pthread_mutex_lock(&mutex);
-//     LOGP("Hello there from Producer\n");
-//     return 0;
-// }
-
 void * consumer_thread(void *data){
+    
     struct dataHolder *d;
     d = data;
     int rank = d->rank;
@@ -82,46 +77,59 @@ void * consumer_thread(void *data){
     uint64_t nonce_end = d->nonce_e;
     uint8_t digest[SHA1_HASH_SIZE];
 
-    LOG("start: %ld check: %ld rank:%d\n", nonce_start, global_check, rank);
+    LOG("start: %ld buffer: %ld rank:%d\n", nonce_start, buffer, rank);
     
-    pthread_mutex_lock(&mutex);
-    while (global_check != nonce_start){
-        // LOGP("check not nonce\n");
-        pthread_cond_wait(&condc, &mutex);
-    }
-
-    uint64_t nonce = mine(
-        
-            data_block,
-            difficulty_mask,
-            nonce_start, nonce_end,
-            digest);
-    
-    // LOGP("Checking nonce\n");
-    LOG("nonce: %ld\n", nonce);
-    if (nonce != 0){
-        LOGP("valid nonce\n");
-        // pthread_mutex_lock(&mutex);
-        
-        // LOGP("Got till after mutext lock\n");
-        global_nonce = nonce;
-        rank_found = rank;
-        // pthread_mutex_unlock(&mutex); 
-        // buffer = 0;
-        // LOGP("Got till after mutex unlock\n");
-    }
-
-    LOG("buffer reset by %d\n", rank);
+    uint64_t local_nonce = buffer;
+    // LOG("local buffer: %ld start_r: %ld\n", local_nonce, nonce_start);
     buffer = 0;
+    for (int i = 0; i < UINT64_MAX; i++){
+        // LOG("iteration: %d\n", i);
+        
+        pthread_mutex_lock(&mutex);
+        
+        nonce_start = local_nonce + (i * step);
+        if (rank != num - 1){
+            // LOGP("Not last\n");
+            nonce_end = nonce_start + step;
+        } 
+        else {
+            // LOGP("Last lol\n");
+            nonce_end = UINT64_MAX;
+        }
 
-    // LOGP("Checked nonce\n");
-    pthread_mutex_unlock(&mutex);
-    // LOGP("About to signal condp\n");
-    pthread_cond_signal(&condp);
-    LOGP("Signalled condp\n");
-    
+        while(buffer != 0 && global_nonce == 0){
+            // LOGP("In this loop\n");
+            pthread_cond_wait(&condc, &mutex);
+        }
 
+        pthread_mutex_unlock(&mutex);
+
+        uint64_t nonce = mine(
+                data_block,
+                difficulty_mask,
+                nonce_start, nonce_end,
+                digest);
+        // LOGP("Checking nonce\n");
+        // LOG("nonce: %ld\n", nonce);
+        if (nonce != 0){
+            LOGP("valid nonce\n");
+            pthread_mutex_lock(&mutex);
+            
+            // LOGP("Got till after mutext lock\n");
+            global_nonce = nonce;
+            rank_found = rank;
+            
+            pthread_cond_broadcast(&condc);
+            pthread_mutex_unlock(&mutex); 
+            // LOGP("Got till after mutex unlock\n");
+            break;
+            // buffer = 0;
+        } 
+
+    }
     free(d);
+    pthread_cond_signal(&condp);
+    pthread_mutex_unlock(&mutex);
 
     return 0;
 }
@@ -185,6 +193,7 @@ int main(int argc, char *argv[]) {
     }
 
     int num_threads = atoi(argv[1]); // TODO
+    int num = num_threads;
     // num_threads++;
     // LOG("Log Threads: %d\n", num_threads);
     printf("Number of threads: %d\n", num_threads);
@@ -231,15 +240,12 @@ int main(int argc, char *argv[]) {
     //         difficulty_mask,
     //         1, UINT64_MAX,
     //         digest);
-    
-    // if (main_nonce != 0){
-    //     global_nonce = main_nonce;
-    //     rank_found = 0;
-    // }
 
+    global_data = bitcoin_block_data;
+    global_diff = difficulty_mask;
 
     pthread_t consumers[num_threads];
-    int addition = 100000;
+    int addition = step;
     uint64_t start = 1;
     for (int i = 0; i < num_threads; i++){
     
@@ -261,53 +267,53 @@ int main(int argc, char *argv[]) {
         // LOG("Testing start range: %d end range: %d\n", tempData->nonce_s, tempData->nonce_e);
         
         pthread_create(&consumers[i], NULL, consumer_thread, ((void *) tempData));
-        // LOG("create testing i: %d\n", tempData->rank);
     }
 
     //pseudo-producer
-    
-    uint64_t range = 1;
-    for (int i = 0; i < num_threads; i++){
-        LOGP("Starting prod loop\n");
-        // if (global_nonce != 0){
-        //     break;
-        // }
+    for (int i = 0; i < UINT64_MAX; i= i + addition){
+        LOG("Starting prod loop %d\n", i);
+        
+        
         pthread_mutex_lock(&mutex);
-        while (buffer != 0) {
+        LOG("buffer: %ld  global_nonce: %ld\n", buffer, global_nonce);
+        // if (i > 0){
+        //     buffer += i;
+        // }
+        while (buffer != 0 && global_nonce == 0) {
+            //pthread_mutex_unlock(&mutex);
+            
+            pthread_cond_broadcast(&condc);
             pthread_cond_wait(&condp, &mutex);
+            LOG("Post wait %ld\n", buffer);
+            // i += addition;
+            // continue;   
         }
-
-        buffer = 1;
-        LOG("ADDITION: %d\n", addition * i);
-        global_check = range + (addition * i);
-        LOG("prod buffer: %ld check: %ld\n", buffer, global_check);
-        // i++;
-
-        if (global_nonce != 0){
-            LOGP("breaking prod loop\n");
-            break;
-        }
-        
-        pthread_cond_broadcast(&condc);
         pthread_mutex_unlock(&mutex);
-
+        LOGP("Didnt get stuck\n");
+    
         if (global_nonce != 0){
             LOGP("breaking prod loop\n");
+            pthread_mutex_unlock(&mutex);
             break;
         }
+
+        buffer = i + 1;
         
+        LOG("buffer: %ld\n", buffer);
+        
+        pthread_cond_signal(&condc);
+        pthread_mutex_unlock(&mutex);
     }
 
-    LOGP("Outside the prod loop\n");
+    // LOGP("Outside the prod loop\n");
 
     for (int i = 0; i < num_threads; i++){
         LOG("Trying to join %d\n", i);
         if (pthread_join(consumers[i], NULL) != 0){
-            LOG("Failed to join %d\n", i);
         }
     }
 
-    LOGP("Joined consumers\n");
+    // LOGP("Joined consumers\n");
 
     double end_time = get_time();
 
