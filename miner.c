@@ -50,7 +50,7 @@ int rank_found = 0;
 char *global_data;
 uint32_t global_diff;
 int num;
-int step = 100000;
+int step = 1000000;
 
 
 struct dataHolder {
@@ -76,12 +76,13 @@ void * consumer_thread(void *data){
     
     uint8_t digest[SHA1_HASH_SIZE];
 
-    // LOG("start: %ld buffer: %ld rank:%d\n", nonce_start, buffer, rank);
+    LOG("rank:%d\n", rank);
     
     uint64_t local_nonce = buffer;
     // LOG("local buffer: %ld start_r: %ld\n", local_nonce, nonce_start);
     buffer = 0;
     for (int i = 0; i < UINT64_MAX; i++){
+        
         // LOG("iteration: %d\n", i);
         uint64_t nonce_start;
         uint64_t nonce_end;
@@ -97,7 +98,6 @@ void * consumer_thread(void *data){
             // LOGP("Last lol\n");
             nonce_end = UINT64_MAX;
         }
-
         while(buffer != 0 && global_nonce == 0){
             // LOGP("In this loop\n");
             pthread_cond_wait(&condc, &mutex);
@@ -113,7 +113,7 @@ void * consumer_thread(void *data){
         // LOGP("Checking nonce\n");
         // LOG("nonce: %ld\n", nonce);
         if (nonce != 0){
-            LOGP("valid nonce\n");
+            // LOGP("valid nonce\n");
             pthread_mutex_lock(&mutex);
             
             // LOGP("Got till after mutext lock\n");
@@ -126,6 +126,7 @@ void * consumer_thread(void *data){
             break;
             // buffer = 0;
         } 
+        pthread_mutex_unlock(&mutex); 
 
     }
     free(d);
@@ -193,7 +194,10 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    int num_threads = atoi(argv[1]); // TODO
+    int num_threads = atoi(argv[1]);
+    if (num_threads ==0){
+        return EXIT_FAILURE;
+    }
     num = num_threads;
     // num_threads++;
     // LOG("Log Threads: %d\n", num_threads);
@@ -247,32 +251,19 @@ int main(int argc, char *argv[]) {
 
     pthread_t consumers[num_threads];
     int addition = step;
-    uint64_t start = 1;
+    // uint64_t start = 1;
     for (int i = 0; i < num_threads; i++){
     
         struct dataHolder *tempData = malloc(sizeof(struct dataHolder));
         tempData->rank = i;
         tempData->data_b = bitcoin_block_data;
         tempData->difficulty_m = difficulty_mask;
-        // if (i == 0){
-        //     tempData->nonce_s = 1;
-        // } else {
-        //     start += addition;
-        //     tempData->nonce_s = start;
-        // }
-        // if (i == num_threads - 1){
-        //     tempData->nonce_e = UINT64_MAX;
-        // } else {
-        //     tempData->nonce_e = start + addition;
-        // }
-        // LOG("Testing start range: %d end range: %d\n", tempData->nonce_s, tempData->nonce_e);
-        
         pthread_create(&consumers[i], NULL, consumer_thread, ((void *) tempData));
     }
 
     //pseudo-producer
     for (int i = 0; i < UINT64_MAX; i= i + addition){
-        LOG("Starting prod loop %d\n", i);
+        // LOG("Starting prod loop %d\n", i);
         
         
         pthread_mutex_lock(&mutex);
@@ -283,20 +274,23 @@ int main(int argc, char *argv[]) {
         while (buffer != 0 && global_nonce == 0) {
             //pthread_mutex_unlock(&mutex);
             
-            pthread_cond_broadcast(&condc);
+            // pthread_cond_broadcast(&condc);
             pthread_cond_wait(&condp, &mutex);
+            // pthread_mutex_unlock(&mutex);
             // LOG("Post wait %ld\n", buffer);
             // i += addition;
             // continue;   
         }
         pthread_mutex_unlock(&mutex);
-        LOGP("Didnt get stuck\n");
+        // LOGP("Didnt get stuck\n");
     
+        
         if (global_nonce != 0){
-            LOGP("breaking prod loop\n");
+            // LOGP("breaking prod loop\n");
             pthread_mutex_unlock(&mutex);
             break;
         }
+        
 
         buffer = i + 1;
         
@@ -305,11 +299,13 @@ int main(int argc, char *argv[]) {
         pthread_cond_signal(&condc);
         pthread_mutex_unlock(&mutex);
     }
+    pthread_mutex_unlock(&mutex);
+    pthread_cond_broadcast(&condc);
 
     // LOGP("Outside the prod loop\n");
 
     for (int i = 0; i < num_threads; i++){
-        LOG("Trying to join %d\n", i);
+        // LOG("Trying to join %d\n", i);
         if (pthread_join(consumers[i], NULL) != 0){
         }
     }
