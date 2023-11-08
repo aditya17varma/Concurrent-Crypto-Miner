@@ -8,7 +8,7 @@ LOGGER ?= 1
 # Compiler/linker flags
 CFLAGS += -g -Wall -fPIC -DLOGGER=$(LOGGER)
 LDLIBS += -lm
-LDFLAGS += -L. -Wl,-rpath='$$ORIGIN'
+LDFLAGS += -L. -Wl,-rpath='$$ORIGIN' -pthread
 
 src=miner.c sha1.c
 obj=$(src:.c=.o)
